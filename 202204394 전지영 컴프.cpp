@@ -4,54 +4,103 @@
 #include <limits>
 #include <string>
 #include <map>
+#include <memory>
+#include <exception>
 
 const int INF = std::numeric_limits<int>::max();
 
-// ±¸Á¶Ã¼: Â÷·® ¹× µå·Ğ
-struct Vehicle {
+// ì¶”ìƒ í´ë˜ìŠ¤: Transport
+class Transport {
+public:
+    virtual void simulate() const = 0; // ìˆœìˆ˜ ê°€ìƒ í•¨ìˆ˜
+    virtual ~Transport() = default; // ê°€ìƒ ì†Œë©¸ì
+};
+
+// ìƒì†: Vehicle í´ë˜ìŠ¤
+class Vehicle : public Transport {
+protected:
     std::string name;
     int current_location;
     int destination;
     std::string type; // "Car" or "Drone"
+
+public:
+    Vehicle(const std::string& name, int current_location, int destination, const std::string& type)
+        : name(name), current_location(current_location), destination(destination), type(type) {}
+
+    virtual void simulate() const override {
+        std::cout << type << " [" << name << "] ì´ë™ ì‹œë®¬ë ˆì´ì…˜ ì¤‘...\n";
+    }
+
+    virtual int calculateETA(int distance) const { // í•¨ìˆ˜ ì¤‘ë³µ
+        return distance / 50; // ê¸°ë³¸ ì†ë„: 50km/h
+    }
+
+    bool operator==(const Vehicle& other) const { // ì—°ì‚°ì ì¤‘ë³µ
+        return name == other.name && type == other.type;
+    }
 };
 
-// ±×·¡ÇÁ Å¬·¡½º
+// ìƒì†: Car í´ë˜ìŠ¤
+class Car : public Vehicle {
+public:
+    Car(const std::string& name, int current_location, int destination)
+        : Vehicle(name, current_location, destination, "Car") {}
+
+    virtual int calculateETA(int distance) const override {
+        return distance / 60; // ìë™ì°¨ ì†ë„: 60km/h
+    }
+};
+
+// ìƒì†: Drone í´ë˜ìŠ¤
+class Drone : public Vehicle {
+public:
+    Drone(const std::string& name, int current_location, int destination)
+        : Vehicle(name, current_location, destination, "Drone") {}
+
+    virtual int calculateETA(int distance) const override {
+        return distance / 80; // ë“œë¡  ì†ë„: 80km/h
+    }
+};
+
+// ê·¸ë˜í”„ í´ë˜ìŠ¤ (ì œë„¤ë¦­ í´ë˜ìŠ¤)
+template <typename T>
 class Graph {
 private:
     int vertices;
-    std::vector<std::vector<std::pair<int, int>>> adj;
+    std::vector<std::vector<std::pair<int, T>>> adj;
 
 public:
     Graph(int v) : vertices(v) {
         adj.resize(v);
     }
 
-    void addEdge(int u, int v, int weight) {
-        adj[u].push_back({ v, weight });
-        adj[v].push_back({ u, weight }); // ¾ç¹æÇâ
+    void addEdge(int u, int v, T weight) {
+        adj[u].emplace_back(v, weight);
+        adj[v].emplace_back(u, weight); // ì–‘ë°©í–¥
     }
 
-    std::vector<int> shortestPath(int start) {
-        std::vector<int> dist(vertices, INF);
-        std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, std::greater<>> pq;
+    std::vector<T> shortestPath(int start) {
+        std::vector<T> dist(vertices, INF);
+        std::priority_queue<std::pair<T, int>, std::vector<std::pair<T, int>>, std::greater<>> pq;
 
         dist[start] = 0;
-        pq.push({ 0, start });
+        pq.emplace(0, start);
 
         while (!pq.empty()) {
             int u = pq.top().second;
-            int d = pq.top().first;
+            T d = pq.top().first;
             pq.pop();
 
             if (d > dist[u]) continue;
 
             for (const auto& edge : adj[u]) {
                 int v = edge.first;
-                int weight = edge.second;
+                T weight = edge.second;
 
                 if (dist[u] + weight < dist[v]) {
                     dist[v] = dist[u] + weight;
-                    pq.push({ dist[v], v });
+                    pq.emplace(dist[v], v);
                 }
             }
         }
@@ -60,74 +109,90 @@ public:
     }
 };
 
-// Â÷·® ÀÌµ¿ ½Ã¹Ä·¹ÀÌ¼Ç
-void simulateVehicle(Vehicle& vehicle, Graph& graph, const std::map<int, std::string>& location_names) {
-    std::cout << vehicle.type << " [" << vehicle.name << "] ½Ã¹Ä·¹ÀÌ¼Ç ½ÃÀÛ\n";
-    std::cout << "Ãâ¹ßÁö: " << location_names.at(vehicle.current_location) << "\n";
-    std::cout << "¸ñÀûÁö: " << location_names.at(vehicle.destination) << "\n";
-
-    auto dist = graph.shortestPath(vehicle.current_location);
-    if (dist[vehicle.destination] == INF) {
-        std::cout << "¸ñÀûÁö±îÁöÀÇ °æ·Î°¡ ¾ø½À´Ï´Ù.\n";
-        return;
+// ì˜ˆì™¸ ì²˜ë¦¬ìš© ì‚¬ìš©ì ì •ì˜ ì˜ˆì™¸
+class InvalidInputException : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "ì˜ëª»ëœ ì…ë ¥ì…ë‹ˆë‹¤. ë‹¤ì‹œ ì‹œë„í•´ì£¼ì„¸ìš”.";
     }
-
-    std::cout << "¸ñÀûÁö±îÁöÀÇ °Å¸®: " << dist[vehicle.destination] << " km\n";
-    std::cout << "ÀÌµ¿ ½Ã¹Ä·¹ÀÌ¼Ç Áß...\n";
-
-    vehicle.current_location = vehicle.destination;
-    std::cout << vehicle.type << " [" << vehicle.name << "]ÀÌ(°¡) ¸ñÀûÁö¿¡ µµÂøÇß½À´Ï´Ù: " << location_names.at(vehicle.destination) << "\n";
-    std::cout << "-------------------------------\n";
-}
+};
 
 int main() {
-    // µµ½Ã ±×·¡ÇÁ (10°³ÀÇ ÁöÁ¡)
-    Graph city(10);
+    try {
+        // ë„ì‹œ ê·¸ë˜í”„ (10ê°œì˜ ì§€ì )
+        Graph<int> city(10);
 
-    // °æ·Î Ãß°¡ (°Å¸® ´ÜÀ§: km)
-    city.addEdge(0, 1, 5);
-    city.addEdge(1, 2, 10);
-    city.addEdge(2, 3, 20);
-    city.addEdge(3, 4, 15);
-    city.addEdge(0, 5, 7);
-    city.addEdge(5, 6, 8);
-    city.addEdge(6, 7, 6);
-    city.addEdge(7, 8, 10);
-    city.addEdge(8, 9, 12);
-    city.addEdge(1, 7, 14);
+        // ê²½ë¡œ ì¶”ê°€ (ê±°ë¦¬ ë‹¨ìœ„: km)
+        city.addEdge(0, 1, 5);
+        city.addEdge(1, 2, 10);
+        city.addEdge(2, 3, 20);
+        city.addEdge(3, 4, 15);
+        city.addEdge(0, 5, 7);
+        city.addEdge(5, 6, 8);
+        city.addEdge(6, 7, 6);
+        city.addEdge(7, 8, 10);
+        city.addEdge(8, 9, 12);
+        city.addEdge(1, 7, 14);
 
-    // ÁöÁ¡ ÀÌ¸§ ¸ÅÇÎ
-    std::map<int, std::string> location_names = {
-        {0, "µµ½Ã Áß½É"}, {1, "ºÏºÎ ¿ª"}, {2, "´ëÇĞ±³"}, {3, "¼îÇÎ¸ô"},
-        {4, "°øÇ×"}, {5, "³²ºÎ ¿ª"}, {6, "º´¿ø"}, {7, "±â¼ú °ø¿ø"},
-        {8, "ÁÖ°Å Áö¿ª"}, {9, "»ê¾÷ Áö¿ª"}
-    };
+        // ì§€ì  ì´ë¦„ ë§¤í•‘
+        std::map<int, std::string> location_names = {
+            {0, "ë„ì‹œ ì¤‘ì‹¬"}, {1, "ë¶ë¶€ ì—­"}, {2, "ëŒ€í•™êµ"}, {3, "ì‡¼í•‘ëª°"},
+            {4, "ê³µí•­"}, {5, "ë‚¨ë¶€ ì—­"}, {6, "ë³‘ì›"}, {7, "ê¸°ìˆ  ê³µì›"},
+            {8, "ì£¼ê±° ì§€ì—­"}, {9, "ì‚°ì—… ì§€ì—­"}
+        };
 
-    // »ç¿ëÀÚ ÀÔ·ÂÀ» ¹Ş¾Æ Â÷·® »ı¼º
-    std::string vehicle_name;
-    std::string vehicle_type;
-    int start_location, end_location;
+        // ì‚¬ìš©ì ì…ë ¥
+        std::string vehicle_name;
+        std::string vehicle_type;
+        int start_location, end_location;
 
-    std::cout << "Â÷·® ¶Ç´Â µå·ĞÀÇ ÀÌ¸§À» ÀÔ·ÂÇÏ¼¼¿ä: ";
-    std::cin >> vehicle_name;
+        std::cout << "ì°¨ëŸ‰ ë˜ëŠ” ë“œë¡ ì˜ ì´ë¦„ì„ ì…ë ¥í•˜ì„¸ìš”: ";
+        std::cin >> vehicle_name;
 
-    std::cout << "¼ö´ÜÀÇ À¯ÇüÀ» ¼±ÅÃÇÏ¼¼¿ä (ÀÚµ¿Â÷/µå·Ğ): ";
-    std::cin >> vehicle_type;
+        std::cout << "ìˆ˜ë‹¨ì˜ ìœ í˜•ì„ ì„ íƒí•˜ì„¸ìš” (ìë™ì°¨/ë“œë¡ ): ";
+        std::cin >> vehicle_type;
 
-    std::cout << "Ãâ¹ßÁö ¹øÈ£¸¦ ÀÔ·ÂÇÏ¼¼¿ä:\n";
-    for (const auto& loc : location_names) {
-        std::cout << loc.first << ": " << loc.second << "\n";
+        std::cout << "ì¶œë°œì§€ ë²ˆí˜¸ë¥¼ ì…ë ¥í•˜ì„¸ìš”:\n";
+        for (const auto& loc : location_names) {
+            std::cout << loc.first << ": " << loc.second << "\n";
+        }
+        std::cin >> start_location;
+
+        std::cout << "ëª©ì ì§€ ë²ˆí˜¸ë¥¼ ì…ë ¥í•˜ì„¸ìš”: ";
+        std::cin >> end_location;
+
+        if (location_names.find(start_location) == location_names.end() || location_names.find(end_location) == location_names.end()) {
+            throw InvalidInputException();
+        }
+
+        // ì°¨ëŸ‰ ë˜ëŠ” ë“œë¡  ìƒì„± (ê°ì²´ í¬ì¸í„°)
+        std::unique_ptr<Transport> user_vehicle;
+        if (vehicle_type == "ìë™ì°¨") {
+            user_vehicle = std::make_unique<Car>(vehicle_name, start_location, end_location);
+        } else if (vehicle_type == "ë“œë¡ ") {
+            user_vehicle = std::make_unique<Drone>(vehicle_name, start_location, end_location);
+        } else {
+            throw InvalidInputException();
+        }
+
+        // ìµœë‹¨ ê²½ë¡œ ê³„ì‚°
+        auto dist = city.shortestPath(start_location);
+        if (dist[end_location] == INF) {
+            std::cout << "ëª©ì ì§€ê¹Œì§€ì˜ ê²½ë¡œê°€ ì—†ìŠµë‹ˆë‹¤.\n";
+            return 0;
+        }
+
+        std::cout << "ì¶œë°œì§€: " << location_names.at(start_location) << "\n";
+        std::cout << "ëª©ì ì§€: " << location_names.at(end_location) << "\n";
+        std::cout << "ìµœë‹¨ ê±°ë¦¬: " << dist[end_location] << " km\n";
+
+        // ETA ê³„ì‚° ë° ì‹œë®¬ë ˆì´ì…˜ ì‹¤í–‰
+        std::cout << "ì˜ˆìƒ ì†Œìš” ì‹œê°„: " << user_vehicle->calculateETA(dist[end_location]) << " ì‹œê°„\n";
+        user_vehicle->simulate();
+
+    } catch (const std::exception& e) {
+        std::cerr << "ì˜¤ë¥˜: " << e.what() << "\n";
     }
-    std::cin >> start_location;
-
-    std::cout << "¸ñÀûÁö ¹øÈ£¸¦ ÀÔ·ÂÇÏ¼¼¿ä: ";
-    std::cin >> end_location;
-
-    // Â÷·® ¶Ç´Â µå·Ğ »ı¼º
-    Vehicle user_vehicle = { vehicle_name, start_location, end_location, vehicle_type };
-
-    // ½Ã¹Ä·¹ÀÌ¼Ç ½ÇÇà
-    simulateVehicle(user_vehicle, city, location_names);
 
     return 0;
 }
